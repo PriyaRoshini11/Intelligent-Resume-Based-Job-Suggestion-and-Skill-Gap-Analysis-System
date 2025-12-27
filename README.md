@@ -20,7 +20,7 @@ Artificial Intelligence | Cloud Computing | Data Engineering | Natural Language 
 
 ✔ Rank jobs using a weighted scoring formula
 
-✔ Provide intelligent explanations using LLM (GPT-5.1)
+✔ Provide intelligent explanations using LLM (GPT-4o-mini)
 
 ✔ Detect missing skills → Recommend Coursera courses
 
@@ -58,7 +58,7 @@ Skill-gap analysis & similarity scoring
 
 Upload resume
 
-Sends resume to S3 → Lambda Trigger
+Resume is stored in S3. Job ingestion Lambda is triggered via HTTP (Streamlit daily refresh or manual fetch).
 
 Fetches stored jobs from MongoDB
 
@@ -70,18 +70,19 @@ Calls LLM for explanations (optional)
 
 Visualizes skill gaps & recommends courses
 
-Provides Daily Refresh → triggers Lambda via HTTP
+Provides Fetch jobs → triggers Lambda via HTTP
 
 **✔ Backend (AWS Lambda)**
 
-Triggered by S3 upload event.
+Triggered via HTTP endpoint (manual fetch or daily refresh from Streamlit).
+
 Lambda tasks:
 
 Fetch multiple job categories (Data Scientist, Software Engineer, Cloud, ML Engineer...)
 
 Normalize raw job records
 
-Add realistic fallback values (salary, posted_date)
+Add realistic fallback values ( posted_date)
 
 Deduplicate using a job hash
 
@@ -91,17 +92,16 @@ jobs collection
 
 Lambda does NOT compute embeddings — Streamlit does it on demand (faster, cheaper).
 
+Matching and embedding computation are intentionally handled in Streamlit to reduce Lambda execution time, cost, and cold-start overhead.
+
 **✔ Database (MongoDB Cloud)**
 
 Collections:
 
-| Collection | Purpose                                       |
-| ---------- | --------------------------------------------- |
-| `resumes`  | Store resume text, metadata                   |
-| `jobs`     | Raw job descriptions fetched by Lambda        |
-| `matches`  | Ranked job recommendations saved by Streamlit |
-| `feedback` | User likes / dislikes for adaptive ranking    |
-
+| Collection | Purpose                                                        |
+| ---------- | -------------------------------------------------------------- |
+| `resumes`  | Store resume text, metadata                                    |
+| `jobs`     | Raw job descriptions fetched by Lambda                         |
 
 **🤖 AI / ML Components:**
 
@@ -121,9 +121,11 @@ Perfect for similarity scoring
 
 final_score = 0.55 * semantic_similarity + 0.25 * keyword_overlap + 0.10 * recency_weight + 0.10 * popularity_score
 
+Note: Popularity score is currently set to a neutral constant (0.5) due to lack of reliable salary/applicant count data from free job APIs.
+
 🧩 3. LLM Reasoning
 
-Uses OpenAI GPT-5.1 via API key to generate:
+Uses OpenAI GPT-4o-mini via API key to generate:
 
 ✔ Why this job matches
 
@@ -137,14 +139,13 @@ Uses OpenAI GPT-5.1 via API key to generate:
 | ------------------------- | -------------------------------------------------------------------------- |
 | **Programming**           | Python                                                                     |
 | **NLP**                   | Sentence Transformers (all-MiniLM-L6-v2), Regex-based parsing              |
-| **AI Reasoning**          | OpenAI GPT-4o / GPT-5.1 (LLM explanations, missing skill generation)       |
+| **AI Reasoning**          | OpenAI GPT-4o-mini (LLM explanations, missing skill generation)            |
 | **Backend**               | AWS S3 (resume uploads), AWS Lambda (job ingestion), AWS CloudWatch        |
-| **Database**              | MongoDB (resumes, jobs, matches, feedback storage)                         |
+| **Database**              | MongoDB (resumes, jobs)                                                    |
 | **Deployment / UI**       | Streamlit                                                                  |
 | **APIs Used**             | JSearch API / Adzuna API (job fetching), Coursera API (course suggestions) |
 | **Visualization**         | Pandas, Matplotlib (skill-gap heatmaps, ranking insights)                  |
 | **File Parsing**          | PyPDF2 / python-docx                                                       |
-| **Scheduling (Optional)** | AWS EventBridge (daily job refresh)                                        |
 
 **🧪 System Workflow:**
 
@@ -154,7 +155,7 @@ User uploads PDF/DOCX → Stored in S3 → Lambda is triggered.
 
 2️⃣ Lambda Processing
 
-Lambda downloads resume → extracts metadata → fetches jobs → normalizes → stores in MongoDB.
+Lambda fetches real-time job listings → normalizes job records → deduplicates → stores jobs in MongoDB.
 
 3️⃣ Streamlit Ranking
 
@@ -181,6 +182,9 @@ Personalized advice
 Skill-gap heatmap
 
 Recommended Coursera courses
+
+Design Choice:
+Matching is performed at request time to ensure resume-specific personalization and reduce backend compute costs.
 
 🏁 Conclusion
 
